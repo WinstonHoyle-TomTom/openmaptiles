@@ -48,8 +48,11 @@ services:
       BORDERS_CSV_FILE: ${BORDERS_CSV_FILE}
       # Control import-sql processes
       MAX_PARALLEL_PSQL: ${MAX_PARALLEL_PSQL}
+      # Storage options
     networks:
       - postgres_conn
+    storage_opt:
+      - '500GB'
     volumes:
       - .:/tileset
       - ./data:/import

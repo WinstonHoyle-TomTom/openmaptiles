@@ -271,6 +271,10 @@ destroy-db:
 	docker volume ls -q -f "name=^$(DC_PROJECT)_" | $(XARGS) docker volume rm
 	rm -rf cache
 
+.PHONY: export-db
+export-db:
+	docker exec it $(PGHOST) /usr/bin/mysqldump -u $(PGUSER) --password=$(PGPASSWORD) $(openmaptiles) > cache/backup.sql
+
 .PHONY: start-db-nowait
 start-db-nowait: init-dirs
 	@echo "Starting postgres docker compose target using $${POSTGIS_IMAGE:-default} image (no recreate if exists)" && \
