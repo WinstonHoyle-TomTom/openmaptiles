@@ -52,7 +52,7 @@ services:
     networks:
       - postgres_conn
     storage_opt:
-      - '500GB'
+      size: '500GB'
     volumes:
       - .:/tileset
       - ./data:/import
