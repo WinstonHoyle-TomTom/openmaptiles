@@ -15,10 +15,13 @@ CREATE OR REPLACE FUNCTION layer_transportation(bbox geometry, zoom_level int)
                 geometry  geometry,
                 class     text,
                 subclass  text,
+                network   text,
                 ramp      int,
                 oneway    int,
                 brunnel   text,
                 service   text,
+                access    text,
+                toll      int,
                 layer     int,
                 level     int,
                 indoor    int,
@@ -33,12 +36,12 @@ $$
 SELECT osm_id,
        geometry,
        CASE
-           WHEN NULLIF(highway, '') IS NOT NULL OR NULLIF(public_transport, '') IS NOT NULL
+           WHEN highway <> '' OR public_transport <> ''
                THEN highway_class(highway, public_transport, construction)
-           WHEN NULLIF(railway, '') IS NOT NULL THEN railway_class(railway)
-           WHEN NULLIF(aerialway, '') IS NOT NULL THEN 'aerialway'
-           WHEN NULLIF(shipway, '') IS NOT NULL THEN shipway
-           WHEN NULLIF(man_made, '') IS NOT NULL THEN man_made
+           WHEN railway <> '' THEN railway_class(railway)
+           WHEN aerialway <> '' THEN 'aerialway'
+           WHEN shipway <> '' THEN shipway
+           WHEN man_made <> '' THEN man_made
            END AS class,
        CASE
            WHEN railway IS NOT NULL THEN railway
@@ -47,14 +50,17 @@ SELECT osm_id,
                THEN COALESCE(NULLIF(public_transport, ''), highway)
            WHEN aerialway IS NOT NULL THEN aerialway
            END AS subclass,
+       NULLIF(network, '') AS network,
        -- All links are considered as ramps as well
        CASE
-           WHEN highway_is_link(highway) OR highway = 'steps'
-               THEN 1
-           ELSE is_ramp::int END AS ramp,
-       is_oneway::int AS oneway,
+           WHEN highway_is_link(highway)
+             OR is_ramp
+               THEN 1 END AS ramp,
+       CASE WHEN is_oneway <> 0 THEN is_oneway::int END AS oneway,
        brunnel(is_bridge, is_tunnel, is_ford) AS brunnel,
        NULLIF(service, '') AS service,
+       access,
+       CASE WHEN toll = TRUE THEN 1 END AS toll,
        NULLIF(layer, 0) AS layer,
        "level",
        CASE WHEN indoor = TRUE THEN 1 END AS indoor,
@@ -69,11 +75,14 @@ FROM (
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                NULL AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -98,11 +107,14 @@ FROM (
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                NULL AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -127,11 +139,14 @@ FROM (
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                NULL AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -156,11 +171,14 @@ FROM (
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                NULL AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -185,11 +203,14 @@ FROM (
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                NULL AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -209,16 +230,19 @@ FROM (
          WHERE zoom_level = 8
          UNION ALL
 
-         -- etldoc: osm_highway_linestring_gen_z9  ->  layer_transportation:z9
+         -- etldoc: osm_transportation_merge_linestring_gen_z9  ->  layer_transportation:z9
          SELECT osm_id,
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                access,
+                toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -234,21 +258,23 @@ FROM (
                 mtb_scale,
                 NULL AS surface,
                 z_order
-         FROM osm_highway_linestring_gen_z9
+         FROM osm_transportation_merge_linestring_gen_z9
          WHERE zoom_level = 9
-           AND ST_Length(geometry) > ZRes(11)
          UNION ALL
 
-         -- etldoc: osm_highway_linestring_gen_z10  ->  layer_transportation:z10
+         -- etldoc: osm_transportation_merge_linestring_gen_z10  ->  layer_transportation:z10
          SELECT osm_id,
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                access,
+                toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -264,21 +290,23 @@ FROM (
                 mtb_scale,
                 NULL AS surface,
                 z_order
-         FROM osm_highway_linestring_gen_z10
+         FROM osm_transportation_merge_linestring_gen_z10
          WHERE zoom_level = 10
-           AND ST_Length(geometry) > ZRes(11)
          UNION ALL
 
-         -- etldoc: osm_highway_linestring_gen_z11  ->  layer_transportation:z11
+         -- etldoc: osm_transportation_merge_linestring_gen_z11  ->  layer_transportation:z11
          SELECT osm_id,
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 NULL AS service,
+                access,
+                toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -294,9 +322,8 @@ FROM (
                 mtb_scale,
                 NULL AS surface,
                 z_order
-         FROM osm_highway_linestring_gen_z11
+         FROM osm_transportation_merge_linestring_gen_z11
          WHERE zoom_level = 11
-           AND ST_Length(geometry) > ZRes(12)
          UNION ALL
 
          -- etldoc: osm_highway_linestring  ->  layer_transportation:z12
@@ -306,11 +333,14 @@ FROM (
                 geometry,
                 highway,
                 construction,
+                network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 public_transport,
                 service_value(service) AS service,
+                CASE WHEN access IN ('private', 'no') THEN 'no' END AS access,
+                toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -328,25 +358,17 @@ FROM (
                 z_order
          FROM osm_highway_linestring
          WHERE NOT is_area
-           AND (
-                     zoom_level = 12 AND (
-                             highway_class(highway, public_transport, construction) NOT IN ('track', 'path', 'minor')
-                         OR highway IN ('unclassified', 'residential')
-                     ) AND man_made <> 'pier'
-                 OR zoom_level = 13
-                         AND (
-                                    highway_class(highway, public_transport, construction) NOT IN ('track', 'path') AND
-                                    man_made <> 'pier'
-                            OR
-                                    man_made = 'pier' AND NOT ST_IsClosed(geometry)
-                        )
-                 OR zoom_level >= 14
-                         AND (
-                            man_made <> 'pier'
-                            OR
-                            NOT ST_IsClosed(geometry)
-                        )
-             )
+           AND
+               CASE WHEN zoom_level = 12 THEN transportation_filter_z12(highway, construction)
+                    WHEN zoom_level = 13 THEN
+                         CASE WHEN man_made='pier' THEN NOT ST_IsClosed(geometry)
+                              ELSE transportation_filter_z13(highway, public_transport, construction, service)
+                         END
+                    WHEN zoom_level >= 14 THEN
+                         CASE WHEN man_made='pier' THEN NOT ST_IsClosed(geometry)
+                              ELSE TRUE
+                         END
+               END
          UNION ALL
 
          -- etldoc: osm_railway_linestring_gen_z8  ->  layer_transportation:z8
@@ -354,11 +376,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 NULL::boolean AS is_bridge,
                 NULL::boolean AS is_tunnel,
                 NULL::boolean AS is_ford,
@@ -386,11 +411,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 NULL::boolean AS is_bridge,
                 NULL::boolean AS is_tunnel,
                 NULL::boolean AS is_ford,
@@ -418,11 +446,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -449,11 +480,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -480,11 +514,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -512,11 +549,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -544,11 +584,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 NULL AS railway,
                 aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -574,11 +617,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 NULL AS railway,
                 aerialway,
                 NULL AS shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -603,11 +649,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 NULL AS railway,
                 NULL AS aerialway,
                 shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -632,11 +681,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 NULL AS railway,
                 NULL AS aerialway,
                 shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -662,11 +714,14 @@ FROM (
                 geometry,
                 NULL AS highway,
                 NULL AS construction,
+                NULL AS network,
                 NULL AS railway,
                 NULL AS aerialway,
                 shipway,
                 NULL AS public_transport,
                 service_value(service) AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 is_bridge,
                 is_tunnel,
                 is_ford,
@@ -696,11 +751,14 @@ FROM (
                 geometry,
                 highway,
                 NULL AS construction,
+                NULL AS network,
                 NULL AS railway,
                 NULL AS aerialway,
                 NULL AS shipway,
                 public_transport,
                 NULL AS service,
+                NULL::text AS access,
+                NULL::boolean AS toll,
                 CASE
                     WHEN man_made IN ('bridge') THEN TRUE
                     ELSE FALSE
